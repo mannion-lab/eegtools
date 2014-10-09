@@ -25,17 +25,20 @@ def convert_bdf_to_fiff(bdf_path, fif_path, pos_path=None, overwrite=True):
     """
 
     if pos_path is not None:
+
         # first step is to convert the POS file to HPTS
         (pos_base, pos_ext) = os.path.splitext(pos_path)
 
-        hpts_path = os.path.join(pos_base, ".hpts")
+        hpts_path = pos_base + ".hpts"
 
         convert_fastrak_to_hpts(
             pos_path=pos_path,
             hpts_path=hpts_path,
             overwrite=overwrite
         )
+
     else:
+
         hpts_path = None
 
     raw = mne.io.read_raw_edf(
@@ -44,67 +47,44 @@ def convert_bdf_to_fiff(bdf_path, fif_path, pos_path=None, overwrite=True):
         verbose="warning"
     )
 
+    chan_mapping = get_unsw_channel_rename_mapping()
+
+    mne.rename_channels(info=raw.info, mapping=chan_mapping)
+
+    raw.save(
+        fname=fif_path,
+        verbose="warning",
+        overwrite=overwrite
+    )
 
 
 def get_unsw_channel_rename_mapping():
-
-
-
-
-def fix_channel_types(fif_path, alias_path=None):
-    """Assign channels in a FIF file to the correct type, which is lost when
-    converting from BDF format.
-
-    Parameters
-    ----------
-    fif_path: string
-        Path to the FIF file to alter.
-    alias_path: string, optional
-        Path to the channel change information file. If not given, a standard
-        based on the 64-channel fix at UNSW is applied.
-
+    """Get the channel info remapping for the UNSW 64-channel BioSemi EEG
+    setup. This can be used in `mne.rename_channels`
     """
 
-    if alias_path is None:
+    eog_chans = ["EXG" + str(chan) for chan in [1, 2, 5]]
 
-        eog_chans = ["EXG" + str(chan) for chan in [1, 2, 5]]
-        misc_chans = ["EXG" + str(chan) for chan in [3, 4, 6, 7, 8]]
+    misc_chans = ["EXG" + str(chan) for chan in [3, 4, 6, 7, 8]]
+    misc_chans.extend(["Erg" + str(chan) for chan in [1, 2]])
+    misc_chans.extend(["GSR" + str(chan) for chan in [1, 2]])
+    misc_chans.extend(["Resp", "Plet", "Temp"])
 
-        misc_chans.extend(["Erg" + str(chan) for chan in [1, 2]])
-        misc_chans.extend(["GSR" + str(chan) for chan in [1, 2]])
-        misc_chans.extend(["Resp", "Plet", "Temp"])
+    # the 'c' at the start is because they won't work with exactly the same
+    # channel name
+    mapping = {
+        eog_chan: ("c" + eog_chan, "eog")
+        for eog_chan in eog_chans
+    }
 
-        eog_code = 202
-        misc_code = 502
+    mapping.update(
+        {
+            misc_chan: ("c" + misc_chan, "misc")
+            for misc_chan in misc_chans
+        }
+    )
 
-        chan_out = [
-            ":".join([chan_name] * 2 + [str(eog_code)])
-            for chan_name in eog_chans
-        ]
-
-        chan_out.extend(
-            [
-                ":".join([chan_name] * 2 + [str(misc_code)])
-                for chan_name in misc_chans
-            ]
-        )
-
-        alias_path = tempfile.NamedTemporaryFile(delete=False)
-
-        alias_path.file.write("\n".join(chan_out))
-
-        alias_path.close()
-
-        alias_path = alias_path.name
-
-    cmd = [
-        "mne_rename_channels",
-        "--fif", fif_path,
-        "--alias", alias_path
-    ]
-
-    runcmd.run_cmd(" ".join(cmd))
-
+    return mapping
 
 
 def convert_fastrak_to_hpts(pos_path, hpts_path, overwrite=False):
@@ -123,7 +103,7 @@ def convert_fastrak_to_hpts(pos_path, hpts_path, overwrite=False):
 
     """
 
-    if overwrite and os.path.exists(hpts_path):
+    if not overwrite and os.path.exists(hpts_path):
         raise ValueError("Output path " + hpts_path + " already exists")
 
     header = "# Converted from " + pos_path + " to " + hpts_path + "\n"
@@ -166,7 +146,7 @@ def convert_fastrak_to_hpts(pos_path, hpts_path, overwrite=False):
 
                 category = "extra"
 
-                identifier = str(i_extra + 1)
+                identifier = str(i_extra)
 
                 i_extra += 1
 
