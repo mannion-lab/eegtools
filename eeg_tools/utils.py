@@ -3,11 +3,22 @@
 import os
 import datetime
 import tempfile
+import logging
+import sys
 
 import runcmd
 
 
-def convert_bdf_to_fiff(bdf_path, fif_path, pos_path=None, overwrite=True):
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+handler = logging.StreamHandler(sys.stdout)
+handler.setLevel(logging.INFO)
+
+logger.addHandler(handler)
+
+
+def convert_bdf_to_fiff(bdf_path, fif_path, pos_path=None):
     """Convert a dataset in BioSemi BDF format into MNE FIF format, adding
     digitiser information and fixing lost information along the way.
 
@@ -17,8 +28,6 @@ def convert_bdf_to_fiff(bdf_path, fif_path, pos_path=None, overwrite=True):
         Paths to the input and output, respectively.
     pos_path: string, optional
         Path to a Polhemus localiser file. This gets converted to a HPTS file.
-    overwrite: bool, optional
-        Whether its ok to overwrite `fif_path`
 
     """
 
@@ -29,11 +38,7 @@ def convert_bdf_to_fiff(bdf_path, fif_path, pos_path=None, overwrite=True):
 
         hpts_path = pos_base + ".hpts"
 
-        convert_fastrak_to_hpts(
-            pos_path=pos_path,
-            hpts_path=hpts_path,
-            overwrite=overwrite
-        )
+        convert_fastrak_to_hpts(pos_path=pos_path, hpts_path=hpts_path)
 
     else:
 
@@ -114,7 +119,7 @@ def fix_channel_types(fif_path, alias_path=None):
     runcmd.run_cmd(" ".join(cmd))
 
 
-def convert_fastrak_to_hpts(pos_path, hpts_path, overwrite=False):
+def convert_fastrak_to_hpts(pos_path, hpts_path, overwrite=True):
     """Convert a set of electrode locations recorded with a Polhemus FASTRAK
     (and saved in '.pos' format) to the 'hpts' format that can be used with the
     MNE suite.
