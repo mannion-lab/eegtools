@@ -5,9 +5,9 @@ import datetime
 import tempfile
 import logging
 import sys
+import ConfigParser
 
-import runcmd
-
+import numpy as np
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -201,3 +201,67 @@ def convert_fastrak_to_hpts(pos_path, hpts_path, overwrite=True):
 
     with open(hpts_path, "w") as hpts_file:
         hpts_file.write(header + data)
+
+
+def convert_brain_vision_to_csv(
+    vhdr_path,
+    dat_path,
+    csv_path,
+    start_ms=-200.0
+):
+
+    eeg_config = ConfigParser.ConfigParser()
+
+    with open(vhdr_path, "r") as handle:
+
+        # skip the first line
+        handle.readline()
+
+        eeg_config.readfp(handle)
+
+        sample_interval = float(
+            eeg_config.get("Common Infos", "SamplingInterval")
+        )
+
+        sample_interval = 1000000.0 / sample_interval
+
+        n_samples = int(eeg_config.get("Common Infos", "DataPoints"))
+        n_in = int(eeg_config.get("Common Infos", "AveragedSegments"))
+        n_channels = int(eeg_config.get("Common Infos", "NumberOfChannels"))
+
+    # time, in ms
+    t = np.arange(n_samples) / sample_interval * 1000.0
+
+    # convert to ERP time
+    t -= start_ms
+
+    data = np.full((n_samples, n_channels), np.nan)
+
+    header = []
+
+    with open(dat_path, "r") as handle:
+
+        raw = handle.readlines()
+
+        for (i_chan, row) in enumerate(raw):
+
+            bits = row.strip().split(" ")
+
+            channel = bits[0]
+            header.append(channel)
+
+            assert all(char == "" for char in bits[1:4])
+
+            data[:, i_chan] = np.array(map(float, bits[4:]))
+
+    return data
+
+    np.savetxt(
+        save_path,
+        data,
+        delimiter=",",
+        header=",".join(header),
+        comments=""
+    )
+
+    return data
