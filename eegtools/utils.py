@@ -5,7 +5,10 @@ import datetime
 import tempfile
 import logging
 import sys
-import ConfigParser
+try:
+    import ConfigParser as configparser
+except ImportError:
+    import configparser
 
 import numpy as np
 
@@ -210,7 +213,7 @@ def convert_brain_vision_to_csv(
     start_ms=-200.0
 ):
 
-    eeg_config = ConfigParser.ConfigParser()
+    eeg_config = configparser.ConfigParser()
 
     with open(vhdr_path, "r") as handle:
 
@@ -233,34 +236,35 @@ def convert_brain_vision_to_csv(
     t = np.arange(n_samples) / sample_interval * 1000.0
 
     # convert to ERP time
-    t -= start_ms
+    t += start_ms
 
-    data = np.full((n_samples, n_channels), np.nan)
+    data = np.full((n_samples, n_channels + 1), np.nan)
 
-    header = []
+    data[:, 0] = t
+
+    header = ["time(ms)"]
 
     with open(dat_path, "r") as handle:
 
         raw = handle.readlines()
 
-        for (i_chan, row) in enumerate(raw):
+        for (i_chan, row) in enumerate(raw, 1):
 
-            bits = row.strip().split(" ")
+            bits = " ".join(row.strip().split()).split()
 
             channel = bits[0]
             header.append(channel)
 
-            assert all(char == "" for char in bits[1:4])
+            data[:, i_chan] = np.array(list(map(float, bits[1:])))
 
-            data[:, i_chan] = np.array(map(float, bits[4:]))
-
-    return data
+    assert np.sum(np.isnan(data)) == 0
 
     np.savetxt(
-        save_path,
+        csv_path,
         data,
         delimiter=",",
         header=",".join(header),
+        fmt="%.12f",
         comments=""
     )
 
